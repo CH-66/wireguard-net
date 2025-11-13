@@ -19,21 +19,30 @@
 sudo apt update
 
 # 安装 Python 和 WireGuard
-sudo apt install python3 python3-pip wireguard -y
+sudo apt install python3 wireguard -y
 
 # 下载工具代码（假设已下载到当前目录）
 cd wireguard-network-toolkit
 
+# 安装 uv（Python 包管理器）
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
 # 安装 Python 依赖
-pip3 install -r requirements.txt
+uv sync
 ```
+
+**注意**：
+- 本项目使用 uv 进行 Python 包管理，uv 是一个快速的 Python 包管理器
+- 如果不想使用 uv，也可以使用传统的 pip: `pip3 install -r requirements.txt`
+- 后续命令可以使用 `uv run python` 或直接 `python3`
 
 ### 1.2 初始化服务端
 
 ```bash
 # 假设你的 VPS 公网 IP 是 203.0.113.100
 # 程序会在需要时自动请求 sudo 权限
-python3 main.py init --endpoint 203.0.113.100:51820
+uv run python main.py init --endpoint 203.0.113.100:51820
+# 或使用: python3 main.py init --endpoint 203.0.113.100:51820
 ```
 
 **提示**：
@@ -87,7 +96,8 @@ WireGuard 服务端初始化
 在另一个终端（或使用 screen/tmux）：
 
 ```bash
-python3 main.py api
+uv run python main.py api
+# 或使用: python3 main.py api
 ```
 
 建议配置 systemd 服务实现开机自启（见下文）。
@@ -98,23 +108,23 @@ python3 main.py api
 
 ```bash
 # 注册第一个 Linux 节点
-python3 main.py register linux-pc1 linux -d "开发机1" --export
+uv run python main.py register linux-pc1 linux -d "开发机1" --export
 
 # 注册第二个 Linux 节点
-python3 main.py register linux-pc2 linux -d "开发机2" --export
+uv run python main.py register linux-pc2 linux -d "开发机2" --export
 
 # 注册第三个 Linux 节点
-python3 main.py register linux-pc3 linux -d "开发机3" --export
+uv run python main.py register linux-pc3 linux -d "开发机3" --export
 ```
 
 ### 2.2 注册 Windows 节点
 
 ```bash
 # 注册第一个 Windows 节点
-python3 main.py register win-pc1 windows -d "办公电蠑1" --export
+uv run python main.py register win-pc1 windows -d "办公电脑1" --export
 
 # 注册第二个 Windows 节点
-python3 main.py register win-pc2 windows -d "办公电蠑2" --export
+uv run python main.py register win-pc2 windows -d "办公电脑2" --export
 ```
 
 每次注册成功后会显示节点信息和接入方式。
@@ -122,7 +132,8 @@ python3 main.py register win-pc2 windows -d "办公电蠑2" --export
 ### 2.3 查看所有节点
 
 ```bash
-python3 main.py list
+uv run python main.py list
+# 或使用: python3 main.py list
 ```
 
 输出示例：
@@ -275,7 +286,7 @@ sudo systemctl status wg-toolkit-api
 
 ```bash
 # 注册新节点
-python3 main.py register new-node linux --export
+uv run python main.py register new-node linux --export
 
 # 客户端接入
 curl http://203.0.113.100:8080/api/download/script/new-node | sudo bash
@@ -285,23 +296,23 @@ curl http://203.0.113.100:8080/api/download/script/new-node | sudo bash
 
 ```bash
 # 查看节点列表，获取节点 ID
-python3 main.py list
+uv run python main.py list
 
 # 删除节点（例如 ID 为 3）
-python3 main.py delete 3
+uv run python main.py delete 3
 ```
 
 ### 查看节点详情
 
 ```bash
 # 按名称查询
-python3 main.py show --name linux-pc1
+uv run python main.py show --name linux-pc1
 
 # 按 ID 查询
-python3 main.py show --id 1
+uv run python main.py show --id 1
 
 # 查看私钥（谨慎使用）
-python3 main.py show --name linux-pc1 --show-private-key
+uv run python main.py show --name linux-pc1 --show-private-key
 ```
 
 ## 常见使用场景

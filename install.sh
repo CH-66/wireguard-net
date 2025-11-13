@@ -71,10 +71,28 @@ else
     echo "✓ WireGuard 已安装"
 fi
 
+# 安装 uv（Python 包管理器）
+echo ""
+echo "检查 uv..."
+if ! command -v uv &> /dev/null; then
+    echo "安装 uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    # 添加 uv 到当前会话的 PATH
+    export PATH="$HOME/.cargo/bin:$PATH"
+else
+    echo "✓ uv 已安装"
+fi
+
 # 安装 Python 依赖
 echo ""
 echo "安装 Python 依赖..."
-pip3 install -r requirements.txt
+if command -v uv &> /dev/null; then
+    uv sync
+    echo "✓ 使用 uv 安装依赖完成"
+else
+    echo "⚠ uv 安装失败，回退到 pip"
+    pip3 install -r requirements.txt
+fi
 
 echo ""
 echo "========================================="
@@ -83,13 +101,16 @@ echo "========================================="
 echo ""
 echo "下一步:"
 echo "1. 初始化服务端:"
-echo "   python3 main.py init --endpoint YOUR_SERVER_IP:51820"
+echo "   uv run python main.py init --endpoint YOUR_SERVER_IP:51820"
+echo "   或: python3 main.py init --endpoint YOUR_SERVER_IP:51820"
 echo ""
 echo "2. 启动 API 服务:"
-echo "   python3 main.py api"
+echo "   uv run python main.py api"
+echo "   或: python3 main.py api"
 echo ""
 echo "3. 查看帮助:"
-echo "   python3 main.py --help"
+echo "   uv run python main.py --help"
 echo ""
 echo "注意: 部分操作需要 sudo 权限，程序会自动请求"
+echo "提示: 使用 'uv run' 可自动激活虚拟环境运行"
 echo "========================================="

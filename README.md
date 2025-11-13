@@ -24,6 +24,13 @@
 - **服务端**: Linux（推荐 Ubuntu 20.04+ 或 CentOS 8+）
 - **客户端**: Linux、Windows
 
+## 文档导航
+
+- **[QUICKSTART.md](QUICKSTART.md)**: 场景化快速开始指南
+- **[UV_USAGE.md](UV_USAGE.md)**: uv 包管理器使用指南
+- **[ARCHITECTURE.md](ARCHITECTURE.md)**: 架构设计文档
+- **[PROJECT_SUMMARY.md](PROJECT_SUMMARY.md)**: 项目总结
+
 ## 快速开始
 
 ### 1. 服务端部署
@@ -34,7 +41,7 @@
 # 确保 VPS 具有公网 IP
 # 安装 Python 3.7+
 sudo apt update
-sudo apt install python3 python3-pip
+sudo apt install python3
 
 # 安装 WireGuard
 sudo apt install wireguard
@@ -42,16 +49,23 @@ sudo apt install wireguard
 # 克隆或下载本项目
 # 假设已下载到 /opt/wireguard-toolkit
 
-# 安装 Python 依赖
+# 安装 uv（Python 包管理器）
 cd /opt/wireguard-toolkit
-pip3 install -r requirements.txt
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 安装 Python 依赖
+uv sync
 ```
+
+**注意**：
+- 本项目使用 uv 进行 Python 包管理，uv 是一个快速的 Python 包管理器
+- 如果不想使用 uv，也可以使用传统的 pip: `pip3 install -r requirements.txt`
 
 #### 1.2 初始化服务端
 
 ```bash
 # 直接运行，程序会在需要时自动请求 sudo 权限
-python3 main.py init --endpoint YOUR_SERVER_IP:51820
+uv run python main.py init --endpoint YOUR_SERVER_IP:51820
 
 # 参数说明:
 # --endpoint: 服务端公网地址（必填，格式: IP:Port 或 domain:Port）
@@ -65,13 +79,13 @@ python3 main.py init --endpoint YOUR_SERVER_IP:51820
 **注意**：
 - 如果当前用户不是 root，程序会自动使用 sudo 执行需要特权的操作
 - 首次运行可能需要输入 sudo 密码
-- 也可以直接使用 `sudo python3 main.py init ...` 方式运行
+- 也可以直接使用 `sudo uv run python main.py init ...` 或 `sudo python3 main.py init ...` 方式运行
 
 #### 1.3 启动 API 服务
 
 ```bash
 # 启动 API 服务（用于客户端在线接入）
-python3 main.py api
+uv run python main.py api
 
 # 可选参数:
 # --host: 监听地址（默认 0.0.0.0）
@@ -89,10 +103,10 @@ python3 main.py api
 
 ```bash
 # 注册 Linux 节点
-python3 main.py register node1 linux --export
+uv run python main.py register node1 linux --export
 
 # 注册 Windows 节点
-python3 main.py register pc1 windows -d "办公电脑" --export
+uv run python main.py register pc1 windows -d "办公电脑" --export
 
 # 参数说明:
 # name: 节点名称（必填，唯一标识）
@@ -146,47 +160,47 @@ sudo bash install.sh
 
 ```bash
 # 列出所有节点
-python3 main.py list
+uv run python main.py list
 
 # 查看节点详情
-python3 main.py show --name node1
-python3 main.py show --id 1
+uv run python main.py show --name node1
+uv run python main.py show --id 1
 
 # 查看节点详情（包含私钥）
-python3 main.py show --name node1 --show-private-key
+uv run python main.py show --name node1 --show-private-key
 
 # 删除节点
-python3 main.py delete 1
+uv run python main.py delete 1
 
 # 强制删除（不确认）
-python3 main.py delete 1 --force
+uv run python main.py delete 1 --force
 
 # 导出节点配置
-python3 main.py export 1
-python3 main.py export 1 --output /path/to/dir
+uv run python main.py export 1
+uv run python main.py export 1 --output /path/to/dir
 ```
 
 ### 服务端信息
 
 ```bash
 # 查看服务端信息
-python3 main.py server-info
+uv run python main.py server-info
 
 # 查看服务端信息（包含私钥）
-python3 main.py server-info --show-private-key
+uv run python main.py server-info --show-private-key
 ```
 
 ### API 服务
 
 ```bash
 # 启动 API 服务
-python3 main.py api
+uv run python main.py api
 
 # 指定监听地址和端口
-python3 main.py api --host 0.0.0.0 --port 8080
+uv run python main.py api --host 0.0.0.0 --port 8080
 
 # 调试模式
-python3 main.py api --debug
+uv run python main.py api --debug
 ```
 
 ## HTTP API 接口
