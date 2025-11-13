@@ -9,6 +9,7 @@ from database import Database
 from key_manager import KeyManager
 from ip_allocator import IPAllocator
 from config_generator import ConfigGenerator
+from privileged_executor import get_executor
 import config
 
 
@@ -25,6 +26,7 @@ class NodeManager:
         self.key_manager = KeyManager()
         self.ip_allocator = IPAllocator(db)
         self.config_generator = ConfigGenerator()
+        self.executor = get_executor()
         
     def register_node(self, node_name: str, platform: str, 
                      description: Optional[str] = None) -> Dict[str, Any]:
@@ -277,14 +279,13 @@ class NodeManager:
                         f_dst.write(f_src.read())
             except Exception as e:
                 print(f"警告: 备份配置文件失败: {str(e)}")
-                
-        # 写入新配置
-        os.makedirs(os.path.dirname(config_path), exist_ok=True)
-        with open(config_path, 'w', encoding='utf-8') as f:
-            f.write(config_content)
-            
-        # 设置文件权限
-        os.chmod(config_path, 0o600)
+        
+        # 使用特权执行器写入新配置
+        self.executor.write_privileged_file(
+            content=config_content,
+            target_path=config_path,
+            mode=0o600
+        )
         
         # 重载 WireGuard 配置
         try:
@@ -298,7 +299,7 @@ class NodeManager:
         
         # 检查接口是否存在
         try:
-            result = subprocess.run(
+            result = self.executor.execute_privileged_command(
                 ['wg', 'show', interface_name],
                 capture_output=True,
                 text=True
@@ -306,14 +307,14 @@ class NodeManager:
             
             if result.returncode == 0:
                 # 接口存在，使用 syncconf 重载
-                subprocess.run(
+                self.executor.execute_privileged_command(
                     ['wg', 'syncconf', interface_name, config.WG_CONFIG_PATH],
                     check=True,
                     capture_output=True
                 )
             else:
                 # 接口不存在，使用 wg-quick 启动
-                subprocess.run(
+                self.executor.execute_privileged_command(
                     ['wg-quick', 'up', interface_name],
                     check=True,
                     capture_output=True

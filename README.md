@@ -17,6 +17,7 @@
 - ✅ RESTful API 接口
 - ✅ 在线和离线两种接入方式
 - ✅ 命令行管理界面
+- ✅ 支持非root用户操作（自动使用sudo）
 
 ### 支持平台
 
@@ -49,8 +50,8 @@ pip3 install -r requirements.txt
 #### 1.2 初始化服务端
 
 ```bash
-# 使用 root 权限运行初始化
-sudo python3 main.py init --endpoint YOUR_SERVER_IP:51820
+# 直接运行，程序会在需要时自动请求 sudo 权限
+python3 main.py init --endpoint YOUR_SERVER_IP:51820
 
 # 参数说明:
 # --endpoint: 服务端公网地址（必填，格式: IP:Port 或 domain:Port）
@@ -61,11 +62,16 @@ sudo python3 main.py init --endpoint YOUR_SERVER_IP:51820
 
 初始化完成后会显示服务端信息和下一步操作提示。
 
+**注意**：
+- 如果当前用户不是 root，程序会自动使用 sudo 执行需要特权的操作
+- 首次运行可能需要输入 sudo 密码
+- 也可以直接使用 `sudo python3 main.py init ...` 方式运行
+
 #### 1.3 启动 API 服务
 
 ```bash
 # 启动 API 服务（用于客户端在线接入）
-sudo python3 main.py api
+python3 main.py api
 
 # 可选参数:
 # --host: 监听地址（默认 0.0.0.0）
@@ -83,10 +89,10 @@ sudo python3 main.py api
 
 ```bash
 # 注册 Linux 节点
-sudo python3 main.py register node1 linux --export
+python3 main.py register node1 linux --export
 
 # 注册 Windows 节点
-sudo python3 main.py register pc1 windows -d "办公电脑" --export
+python3 main.py register pc1 windows -d "办公电脑" --export
 
 # 参数说明:
 # name: 节点名称（必填，唯一标识）
@@ -94,6 +100,8 @@ sudo python3 main.py register pc1 windows -d "办公电脑" --export
 # -d, --description: 节点描述（可选）
 # -e, --export: 导出配置到文件（可选，用于离线分发）
 ```
+
+**注意**：注册节点时需要更新 WireGuard 配置，程序会自动使用 sudo 权限。
 
 #### 2.2 在线接入方式
 
@@ -227,6 +235,68 @@ GET /api/download/script/<node_name>
 ```
 
 ## 配置说明
+
+### 权限说明
+
+本工具支持非 root 用户运行，会在需要时自动使用 sudo 权限。
+
+#### 需要特权的操作
+
+以下操作需要 root 或 sudo 权限：
+
+- **WireGuard 管理**：启动/停止/重载 WireGuard 接口
+- **防火墙配置**：配置 iptables NAT 和转发规则
+- **系统配置**：启用 IP 转发，修改 /etc/sysctl.conf
+- **配置文件**：写入 /etc/wireguard/wg0.conf
+
+#### 使用方式
+
+**方式一：直接运行（推荐）**
+```bash
+# 程序会自动检测并在需要时使用 sudo
+python3 main.py init --endpoint YOUR_SERVER_IP:51820
+python3 main.py register node1 linux
+```
+
+**方式二：手动添加 sudo**
+```bash
+# 也可以手动在命令前添加 sudo
+sudo python3 main.py init --endpoint YOUR_SERVER_IP:51820
+sudo python3 main.py register node1 linux
+```
+
+**方式三：使用 root 用户**
+```bash
+# 切换到 root 用户后直接运行
+sudo su -
+python3 main.py init --endpoint YOUR_SERVER_IP:51820
+```
+
+#### 权限检测
+
+程序启动时会自动检测权限状态：
+
+- **root 用户**：直接执行，无需 sudo
+- **非 root 且 sudo 可用**：自动使用 sudo，可能需要输入密码
+- **非 root 且 sudo 不可用**：提示错误，请安装 sudo 或使用 root 用户
+
+#### 免密码配置（可选）
+
+为避免频繁输入 sudo 密码，可以配置 sudo 免密：
+
+```bash
+# 创建 sudoers 配置文件
+sudo visudo -f /etc/sudoers.d/wireguard-toolkit
+
+# 添加以下内容（替换 username 为你的用户名）
+username ALL=(ALL) NOPASSWD: /usr/bin/wg
+username ALL=(ALL) NOPASSWD: /usr/bin/wg-quick
+username ALL=(ALL) NOPASSWD: /usr/sbin/iptables
+username ALL=(ALL) NOPASSWD: /usr/sbin/iptables-save
+username ALL=(ALL) NOPASSWD: /usr/bin/tee /proc/sys/net/ipv4/ip_forward
+```
+
+**注意**：此为可选配置，仅当需要频繁执行管理操作时推荐。
 
 ### 默认配置
 

@@ -8,6 +8,8 @@
 - 2 台 Windows 办公电脑
 - 需要这些设备能够互相访问
 
+**注意**：本工具支持非root用户运行，会在需要时自动使用 sudo 权限。命令示例中已移除 sudo 前缀，程序会自动处理权限问题。
+
 ## 第一步：服务端部署（在 VPS 上）
 
 ### 1.1 安装依赖
@@ -30,8 +32,13 @@ pip3 install -r requirements.txt
 
 ```bash
 # 假设你的 VPS 公网 IP 是 203.0.113.100
-sudo python3 main.py init --endpoint 203.0.113.100:51820
+# 程序会在需要时自动请求 sudo 权限
+python3 main.py init --endpoint 203.0.113.100:51820
 ```
+
+**提示**：
+- 如果是非root用户，初次运行时可能需要输入 sudo 密码
+- 程序会自动检测权限，并在必要时使用 sudo
 
 输出示例：
 ```
@@ -40,6 +47,7 @@ WireGuard 服务端初始化
 ========================================
 
 检查系统要求...
+ℹ 检测到非root用户，部分操作将使用sudo权限
 ✓ 系统要求检查通过
 
 生成服务端密钥对...
@@ -79,7 +87,7 @@ WireGuard 服务端初始化
 在另一个终端（或使用 screen/tmux）：
 
 ```bash
-sudo python3 main.py api
+python3 main.py api
 ```
 
 建议配置 systemd 服务实现开机自启（见下文）。
@@ -90,23 +98,23 @@ sudo python3 main.py api
 
 ```bash
 # 注册第一个 Linux 节点
-sudo python3 main.py register linux-pc1 linux -d "开发机1" --export
+python3 main.py register linux-pc1 linux -d "开发机1" --export
 
 # 注册第二个 Linux 节点
-sudo python3 main.py register linux-pc2 linux -d "开发机2" --export
+python3 main.py register linux-pc2 linux -d "开发机2" --export
 
 # 注册第三个 Linux 节点
-sudo python3 main.py register linux-pc3 linux -d "开发机3" --export
+python3 main.py register linux-pc3 linux -d "开发机3" --export
 ```
 
 ### 2.2 注册 Windows 节点
 
 ```bash
 # 注册第一个 Windows 节点
-sudo python3 main.py register win-pc1 windows -d "办公电脑1" --export
+python3 main.py register win-pc1 windows -d "办公电蠑1" --export
 
 # 注册第二个 Windows 节点
-sudo python3 main.py register win-pc2 windows -d "办公电脑2" --export
+python3 main.py register win-pc2 windows -d "办公电蠑2" --export
 ```
 
 每次注册成功后会显示节点信息和接入方式。
@@ -114,7 +122,7 @@ sudo python3 main.py register win-pc2 windows -d "办公电脑2" --export
 ### 2.3 查看所有节点
 
 ```bash
-sudo python3 main.py list
+python3 main.py list
 ```
 
 输出示例：
@@ -267,7 +275,7 @@ sudo systemctl status wg-toolkit-api
 
 ```bash
 # 注册新节点
-sudo python3 main.py register new-node linux --export
+python3 main.py register new-node linux --export
 
 # 客户端接入
 curl http://203.0.113.100:8080/api/download/script/new-node | sudo bash
@@ -277,23 +285,23 @@ curl http://203.0.113.100:8080/api/download/script/new-node | sudo bash
 
 ```bash
 # 查看节点列表，获取节点 ID
-sudo python3 main.py list
+python3 main.py list
 
 # 删除节点（例如 ID 为 3）
-sudo python3 main.py delete 3
+python3 main.py delete 3
 ```
 
 ### 查看节点详情
 
 ```bash
 # 按名称查询
-sudo python3 main.py show --name linux-pc1
+python3 main.py show --name linux-pc1
 
 # 按 ID 查询
-sudo python3 main.py show --id 1
+python3 main.py show --id 1
 
 # 查看私钥（谨慎使用）
-sudo python3 main.py show --name linux-pc1 --show-private-key
+python3 main.py show --name linux-pc1 --show-private-key
 ```
 
 ## 常见使用场景

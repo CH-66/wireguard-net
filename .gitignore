@@ -42,6 +42,7 @@ wg_data/
 *.swp
 *.swo
 *~
+.qoder/
 
 # Logs
 *.log

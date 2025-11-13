@@ -9,6 +9,7 @@ from typing import Optional
 from database import Database
 from key_manager import KeyManager
 from config_generator import ConfigGenerator
+from privileged_executor import get_executor
 import config
 
 
@@ -19,6 +20,7 @@ class ServerInitializer:
         """初始化"""
         self.key_manager = KeyManager()
         self.config_generator = ConfigGenerator()
+        self.executor = get_executor()
         
     def check_requirements(self) -> tuple[bool, list[str]]:
         """检查系统要求
@@ -28,10 +30,13 @@ class ServerInitializer:
         """
         errors = []
         
-        # 检查是否为 root 用户（Linux）
-        if sys.platform.startswith('linux'):
-            if os.geteuid() != 0:
-                errors.append("需要 root 权限运行初始化")
+        # 检查权限要求
+        ok, msg = self.executor.check_privilege_requirements()
+        if not ok:
+            errors.append(msg)
+        elif msg:
+            # 有提示信息（如非root用户警告）
+            print(msg)
                 
         # 检查 WireGuard 是否已安装
         if not self.key_manager.check_wireguard_installed():
@@ -125,15 +130,12 @@ class ServerInitializer:
                 nodes=[]  # 初始时没有节点
             )
             
-            # 创建配置文件目录
-            os.makedirs(os.path.dirname(config.WG_CONFIG_PATH), exist_ok=True)
-            
-            # 写入配置文件
-            with open(config.WG_CONFIG_PATH, 'w', encoding='utf-8') as f:
-                f.write(config_content)
-                
-            # 设置文件权限
-            os.chmod(config.WG_CONFIG_PATH, 0o600)
+            # 使用特权执行器写入配置文件
+            self.executor.write_privileged_file(
+                content=config_content,
+                target_path=config.WG_CONFIG_PATH,
+                mode=0o600
+            )
             
             print(f"✓ 配置文件已生成: {config.WG_CONFIG_PATH}")
         except Exception as e:
@@ -185,13 +187,13 @@ class ServerInitializer:
         interface_name = config.WG_INTERFACE_NAME
         
         # 先尝试停止现有接口
-        subprocess.run(
+        self.executor.execute_privileged_command(
             ['wg-quick', 'down', interface_name],
             capture_output=True
         )
         
         # 启动接口
-        result = subprocess.run(
+        result = self.executor.execute_privileged_command(
             ['wg-quick', 'up', interface_name],
             capture_output=True,
             text=True
@@ -203,8 +205,7 @@ class ServerInitializer:
     def _configure_networking(self):
         """配置 IP 转发和 NAT"""
         # 启用 IP 转发
-        with open('/proc/sys/net/ipv4/ip_forward', 'w') as f:
-            f.write('1\n')
+        self.executor.write_system_file('1\n', '/proc/sys/net/ipv4/ip_forward')
             
         # 持久化 IP 转发配置
         sysctl_conf = '/etc/sysctl.conf'
@@ -213,13 +214,16 @@ class ServerInitializer:
                 content = f.read()
                 
             if 'net.ipv4.ip_forward' not in content:
-                with open(sysctl_conf, 'a') as f:
-                    f.write('\n# Enable IP forwarding for WireGuard\n')
-                    f.write('net.ipv4.ip_forward=1\n')
+                # 追加配置到 sysctl.conf
+                append_content = '\n# Enable IP forwarding for WireGuard\nnet.ipv4.ip_forward=1\n'
+                self.executor.write_system_file(
+                    content + append_content,
+                    sysctl_conf
+                )
                     
         # 获取默认网络接口
         try:
-            result = subprocess.run(
+            result = self.executor.execute_command(
                 ['ip', 'route', 'show', 'default'],
                 capture_output=True,
                 text=True,
@@ -233,42 +237,42 @@ class ServerInitializer:
         # 配置 NAT（使用 iptables）
         wg_iface = config.WG_INTERFACE_NAME
         
-        # 清除现有规则
-        subprocess.run(
+        # 清除现有规则（忽略错误）
+        self.executor.execute_privileged_command(
             ['iptables', '-D', 'FORWARD', '-i', wg_iface, '-j', 'ACCEPT'],
             capture_output=True
         )
-        subprocess.run(
+        self.executor.execute_privileged_command(
             ['iptables', '-D', 'FORWARD', '-o', wg_iface, '-j', 'ACCEPT'],
             capture_output=True
         )
-        subprocess.run(
+        self.executor.execute_privileged_command(
             ['iptables', '-t', 'nat', '-D', 'POSTROUTING', '-o', default_iface, '-j', 'MASQUERADE'],
             capture_output=True
         )
         
         # 添加新规则
-        subprocess.run(
+        self.executor.execute_privileged_command(
             ['iptables', '-A', 'FORWARD', '-i', wg_iface, '-j', 'ACCEPT'],
             check=True
         )
-        subprocess.run(
+        self.executor.execute_privileged_command(
             ['iptables', '-A', 'FORWARD', '-o', wg_iface, '-j', 'ACCEPT'],
             check=True
         )
-        subprocess.run(
+        self.executor.execute_privileged_command(
             ['iptables', '-t', 'nat', '-A', 'POSTROUTING', '-o', default_iface, '-j', 'MASQUERADE'],
             check=True
         )
         
         # 尝试保存 iptables 规则
         for cmd in [
-            ['iptables-save', '>', '/etc/iptables/rules.v4'],
+            ['iptables-save'],
             ['netfilter-persistent', 'save'],
             ['service', 'iptables', 'save']
         ]:
             try:
-                subprocess.run(cmd, shell=True, capture_output=True)
+                self.executor.execute_privileged_command(cmd, capture_output=True)
                 break
             except:
                 continue
