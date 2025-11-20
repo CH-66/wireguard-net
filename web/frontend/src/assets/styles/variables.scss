@@ -1,0 +1,44 @@
+/**
+ * CSS变量定义
+ */
+
+:root {
+  /* 主题色 */
+  --primary-color: #409EFF;
+  --success-color: #67C23A;
+  --warning-color: #E6A23C;
+  --danger-color: #F56C6C;
+  --info-color: #909399;
+  
+  /* 背景色 */
+  --bg-color: #f5f7fa;
+  --bg-white: #ffffff;
+  
+  /* 文字色 */
+  --text-primary: #303133;
+  --text-regular: #606266;
+  --text-secondary: #909399;
+  --text-placeholder: #C0C4CC;
+  
+  /* 边框色 */
+  --border-color: #DCDFE6;
+  --border-light: #E4E7ED;
+  
+  /* 布局尺寸 */
+  --header-height: 60px;
+  --footer-height: 40px;
+  --sidebar-width: 200px;
+  
+  /* 间距 */
+  --spacing-xs: 8px;
+  --spacing-sm: 12px;
+  --spacing-md: 16px;
+  --spacing-lg: 20px;
+  --spacing-xl: 24px;
+  
+  /* 圆角 */
+  --border-radius: 4px;
+  
+  /* 阴影 */
+  --box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+}
