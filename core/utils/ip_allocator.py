@@ -4,7 +4,7 @@ IP 地址分配模块
 """
 import ipaddress
 from typing import Optional
-from database import Database
+from core.models.database import Database
 
 
 class IPAllocator:

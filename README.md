@@ -26,10 +26,12 @@
 
 ## 文档导航
 
-- **[QUICKSTART.md](QUICKSTART.md)**: 场景化快速开始指南
-- **[UV_USAGE.md](UV_USAGE.md)**: uv 包管理器使用指南
-- **[ARCHITECTURE.md](ARCHITECTURE.md)**: 架构设计文档
-- **[PROJECT_SUMMARY.md](PROJECT_SUMMARY.md)**: 项目总结
+- **[QUICKSTART.md](doc/QUICKSTART.md)**: 场景化快速开始指南
+- **[CLI_REFERENCE.md](doc/CLI_REFERENCE.md)**: CLI 命令参考
+- **[API_REFERENCE.md](doc/API_REFERENCE.md)**: API 接口参考
+- **[MIGRATION.md](doc/MIGRATION.md)**: 从旧版本迁移指南
+- **[ARCHITECTURE.md](doc/ARCHITECTURE.md)**: 架构设计文档
+- **[DEVELOPMENT.md](doc/DEVELOPMENT.md)**: 开发者指南
 
 ## 快速开始
 
@@ -64,14 +66,15 @@ uv sync
 #### 1.2 初始化服务端
 
 ```bash
-# 直接运行，程序会在需要时自动请求 sudo 权限
-uv run python main.py init --endpoint YOUR_SERVER_IP:51820
+# 使用统一入口（推荐）
+uv run wg-toolkit init --endpoint YOUR_SERVER_IP:51820
 
 # 参数说明:
 # --endpoint: 服务端公网地址（必填，格式: IP:Port 或 domain:Port）
 # --port: WireGuard 监听端口（可选，默认 51820）
 # --network: 虚拟网络段（可选，默认 10.0.0.0/24）
 # --server-ip: 服务端虚拟 IP（可选，默认 10.0.0.1）
+# --force: 强制重新初始化（覆盖现有配置）
 ```
 
 初始化完成后会显示服务端信息和下一步操作提示。
@@ -79,21 +82,25 @@ uv run python main.py init --endpoint YOUR_SERVER_IP:51820
 **注意**：
 - 如果当前用户不是 root，程序会自动使用 sudo 执行需要特权的操作
 - 首次运行可能需要输入 sudo 密码
-- 也可以直接使用 `sudo uv run python main.py init ...` 或 `sudo python3 main.py init ...` 方式运行
 
-#### 1.3 启动 API 服务
+#### 1.3 启动 Web API 服务
 
 ```bash
-# 启动 API 服务（用于客户端在线接入）
-uv run python main.py api
+# 使用统一入口启动 FastAPI 服务（推荐）
+uv run wg-toolkit web start
+
+# 带参数启动
+uv run wg-toolkit web start --host 0.0.0.0 --port 8080 --reload
 
 # 可选参数:
 # --host: 监听地址（默认 0.0.0.0）
 # --port: 监听端口（默认 8080）
-# --debug: 调试模式
+# --reload: 启用热重载（开发模式）
 ```
 
-建议使用 systemd 或 supervisor 管理 API 服务，确保开机自启。
+建议使用 systemd 管理 Web 服务，确保开机自启。
+
+**API 文档**: 访问 `http://YOUR_SERVER_IP:8080/docs` 查看自动生成的 API 文档。
 
 ### 2. 客户端接入
 
@@ -103,10 +110,10 @@ uv run python main.py api
 
 ```bash
 # 注册 Linux 节点
-uv run python main.py register node1 linux --export
+uv run wg-toolkit register node1 linux --export
 
 # 注册 Windows 节点
-uv run python main.py register pc1 windows -d "办公电脑" --export
+uv run wg-toolkit register pc1 windows -d "办公电脑" --export
 
 # 参数说明:
 # name: 节点名称（必填，唯一标识）
@@ -156,51 +163,80 @@ sudo bash install.sh
 
 ## 命令行工具
 
+### 基本命令
+
+```bash
+# 查看帮助
+uv run wg-toolkit --help
+uv run wg-toolkit init --help
+
+# 初始化服务端
+uv run wg-toolkit init --endpoint YOUR_IP:51820
+
+# 注册节点
+uv run wg-toolkit register node1 linux --export
+
+# 查看服务端信息
+uv run wg-toolkit server-info
+
+# 启动 Web 服务
+uv run wg-toolkit web start
+```
+
 ### 节点管理
 
 ```bash
 # 列出所有节点
-uv run python main.py list
+uv run wg-toolkit list
 
 # 查看节点详情
-uv run python main.py show --name node1
-uv run python main.py show --id 1
+uv run wg-toolkit show --name node1
+uv run wg-toolkit show --id 1
 
 # 查看节点详情（包含私钥）
-uv run python main.py show --name node1 --show-private-key
+uv run wg-toolkit show --name node1 --show-private-key
 
 # 删除节点
-uv run python main.py delete 1
+uv run wg-toolkit delete 1
 
 # 强制删除（不确认）
-uv run python main.py delete 1 --force
+uv run wg-toolkit delete 1 --force
 
 # 导出节点配置
-uv run python main.py export 1
-uv run python main.py export 1 --output /path/to/dir
+uv run wg-toolkit export 1
+uv run wg-toolkit export 1 --output /path/to/dir
 ```
 
 ### 服务端信息
 
 ```bash
 # 查看服务端信息
-uv run python main.py server-info
+uv run wg-toolkit server-info
 
 # 查看服务端信息（包含私钥）
-uv run python main.py server-info --show-private-key
+uv run wg-toolkit server-info --show-private-key
 ```
 
-### API 服务
+### Web 服务
 
 ```bash
-# 启动 API 服务
-uv run python main.py api
+# 启动 Web API 服务
+uv run wg-toolkit web start
 
 # 指定监听地址和端口
-uv run python main.py api --host 0.0.0.0 --port 8080
+uv run wg-toolkit web start --host 0.0.0.0 --port 8080
 
-# 调试模式
-uv run python main.py api --debug
+# 开发模式（启用热重载）
+uv run wg-toolkit web start --reload
+```
+
+## HTTP API 接口
+
+完整的 API 文档请访问：
+- **交互式文档**: `http://your-server:8080/docs`
+- **详细参考**: [API_REFERENCE.md](doc/API_REFERENCE.md)
+
+### 基本示例
 ```
 
 ## HTTP API 接口
@@ -265,25 +301,12 @@ GET /api/download/script/<node_name>
 
 #### 使用方式
 
-**方式一：直接运行（推荐）**
+程序会自动检测并在需要时使用 sudo：
+
 ```bash
 # 程序会自动检测并在需要时使用 sudo
-python3 main.py init --endpoint YOUR_SERVER_IP:51820
-python3 main.py register node1 linux
-```
-
-**方式二：手动添加 sudo**
-```bash
-# 也可以手动在命令前添加 sudo
-sudo python3 main.py init --endpoint YOUR_SERVER_IP:51820
-sudo python3 main.py register node1 linux
-```
-
-**方式三：使用 root 用户**
-```bash
-# 切换到 root 用户后直接运行
-sudo su -
-python3 main.py init --endpoint YOUR_SERVER_IP:51820
+uv run wg-toolkit init --endpoint YOUR_SERVER_IP:51820
+uv run wg-toolkit register node1 linux
 ```
 
 #### 权限检测
@@ -314,7 +337,7 @@ username ALL=(ALL) NOPASSWD: /usr/bin/tee /proc/sys/net/ipv4/ip_forward
 
 ### 默认配置
 
-配置文件: `config.py`
+配置文件: `config/base.py`
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
@@ -329,24 +352,30 @@ username ALL=(ALL) NOPASSWD: /usr/bin/tee /proc/sys/net/ipv4/ip_forward
 ### 目录结构
 
 ```
-wireguard-toolkit/
-├── main.py                 # 主程序入口
-├── config.py              # 配置文件
-├── database.py            # 数据库模块
-├── key_manager.py         # 密钥管理模块
-├── ip_allocator.py        # IP 地址分配模块
-├── config_generator.py    # 配置文件生成模块
-├── node_manager.py        # 节点管理模块
-├── server_init.py         # 服务端初始化模块
-├── api_server.py          # HTTP API 服务
-├── requirements.txt       # Python 依赖
-├── README.md             # 本文档
-├── wg_data/              # 数据目录
-│   └── wg_nodes.db       # SQLite 数据库
-└── exports/              # 配置导出目录
-    └── node_name/        # 节点配置目录
-        ├── wg0.conf      # WireGuard 配置
-        └── install.sh    # 接入脚本
+wireguard-net/
+├── cli/                       # CLI 模块
+│   └── commands/             # CLI 命令实现
+├── web/                      # Web 模块
+│   └── backend/
+│       ├── api/v1/          # API 路由
+│       ├── schemas/         # Pydantic 模型
+│       └── main.py          # FastAPI 应用
+├── core/                     # 核心业务逻辑
+│   ├── domain/              # 领域模型
+│   ├── models/              # 数据访问层
+│   ├── services/            # 服务层
+│   └── utils/               # 工具类
+├── config/                   # 配置管理
+├── scripts/                  # 辅助脚本
+├── doc/                      # 文档
+├── wg_toolkit_cli.py        # 统一入口
+├── pyproject.toml           # 项目配置
+├── wg_data/                  # 数据目录
+│   └── wg_nodes.db           # SQLite 数据库
+└── exports/                  # 配置导出目录
+    └── <node_name>/          # 节点配置目录
+        ├── wg0.conf          # WireGuard 配置
+        └── install.sh        # 接入脚本
 ```
 
 ## 网络配置

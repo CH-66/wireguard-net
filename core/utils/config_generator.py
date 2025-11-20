@@ -3,7 +3,7 @@
 负责生成 WireGuard 服务端和客户端配置文件
 """
 from typing import List, Dict, Any, Optional
-import config
+from config import base as config
 
 
 class ConfigGenerator:

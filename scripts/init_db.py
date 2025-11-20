@@ -3,7 +3,13 @@
 数据库初始化脚本
 用于创建数据库文件和表结构
 """
-from database import Database
+import sys
+from pathlib import Path
+
+# 添加项目根目录到路径
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from core.models.database import Database
 
 def init_database():
     """初始化数据库"""

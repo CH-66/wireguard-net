@@ -23,6 +23,10 @@ classifiers = [
 ]
 dependencies = [
     "flask>=2.3.0",
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "pydantic>=2.5.0",
+    "python-multipart>=0.0.6",
 ]
 
 [project.optional-dependencies]
@@ -34,7 +38,7 @@ dev = [
 ]
 
 [project.scripts]
-wg-toolkit = "main:main"
+wg-toolkit = "wg_toolkit_cli:main"
 
 [build-system]
 requires = ["hatchling"]

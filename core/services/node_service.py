@@ -1,33 +1,37 @@
 """
-节点管理模块
-负责节点的注册、查询、删除等操作
+节点服务
+实现节点相关的业务逻辑
 """
 import os
-import subprocess
 from typing import Optional, Dict, Any, List
-from database import Database
-from key_manager import KeyManager
-from ip_allocator import IPAllocator
-from config_generator import ConfigGenerator
-from privileged_executor import get_executor
-import config
+from core.domain.node import Node
+from core.models.database import Database
+from core.models.repositories.node_repo import NodeRepository
+from core.models.repositories.server_repo import ServerRepository
+from core.utils.key_manager import KeyManager
+from core.utils.ip_allocator import IPAllocator
+from core.utils.config_generator import ConfigGenerator
+from core.utils.privileged_executor import get_executor
+from config import base as config
 
 
-class NodeManager:
-    """节点管理器"""
+class NodeService:
+    """节点服务"""
     
     def __init__(self, db: Database):
-        """初始化节点管理器
+        """初始化
         
         Args:
             db: 数据库实例
         """
         self.db = db
+        self.node_repo = NodeRepository(db)
+        self.server_repo = ServerRepository(db)
         self.key_manager = KeyManager()
         self.ip_allocator = IPAllocator(db)
         self.config_generator = ConfigGenerator()
         self.executor = get_executor()
-        
+    
     def register_node(self, node_name: str, platform: str, 
                      description: Optional[str] = None) -> Dict[str, Any]:
         """注册新节点
@@ -38,7 +42,7 @@ class NodeManager:
             description: 节点描述
             
         Returns:
-            节点信息字典，包含 node_id, virtual_ip, config_content, script_content 等
+            节点信息字典
             
         Raises:
             ValueError: 参数验证失败
@@ -52,19 +56,18 @@ class NodeManager:
             raise ValueError("平台类型必须为 linux 或 windows")
             
         # 检查节点名称是否已存在
-        existing_node = self.db.get_node_by_name(node_name)
-        if existing_node:
+        if self.node_repo.exists_by_name(node_name):
             raise ValueError(f"节点名称 '{node_name}' 已存在")
             
         # 获取服务端信息
-        server_info = self.db.get_server_info()
-        if not server_info:
+        server = self.server_repo.get()
+        if not server:
             raise RuntimeError("服务端未初始化，请先运行初始化命令")
             
         # 分配 IP 地址
         virtual_ip = self.ip_allocator.allocate_ip(
-            server_info['network_cidr'],
-            server_info['virtual_ip']
+            server.network_cidr,
+            server.virtual_ip
         )
         
         if not virtual_ip:
@@ -76,8 +79,8 @@ class NodeManager:
         except Exception as e:
             raise RuntimeError(f"生成密钥失败: {str(e)}")
             
-        # 保存节点信息到数据库
-        node_id = self.db.add_node(
+        # 创建节点实体
+        node = Node(
             node_name=node_name,
             virtual_ip=virtual_ip,
             public_key=public_key,
@@ -86,53 +89,60 @@ class NodeManager:
             description=description
         )
         
-        # 生成客户端配置
-        node_info = self.db.get_node_by_id(node_id)
+        # 验证节点数据
+        valid, error_msg = node.validate()
+        if not valid:
+            raise ValueError(error_msg)
+            
+        # 保存节点
+        try:
+            node_id = self.node_repo.add(node)
+        except Exception as e:
+            raise RuntimeError(f"保存节点失败: {str(e)}")
+            
+        # 更新服务端配置
+        try:
+            self._update_server_config()
+        except Exception as e:
+            # 回滚：删除已添加的节点
+            self.node_repo.delete(node_id)
+            raise RuntimeError(f"更新服务端配置失败: {str(e)}")
+            
+        # 生成配置和脚本
         dns_server = self.db.get_config_param('dns_server') or config.DEFAULT_DNS_SERVER
-        
         config_content = self.config_generator.generate_client_config(
-            node_info=node_info,
-            server_info=server_info,
+            node_info=node.to_dict(include_private_key=True),
+            server_info=server.to_dict(include_private_key=True),
             dns_server=dns_server
         )
         
-        # 生成接入脚本（需要服务端 API 地址）
-        # 这里暂时使用占位符，实际使用时需要替换
-        server_api = f"http://SERVER_IP:{config.API_PORT}"
-        
+        # 生成接入脚本
+        server_api = f"http://SERVER_IP:8080"
         if platform == 'linux':
             script_content = self.config_generator.generate_linux_install_script(
                 node_name=node_name,
                 server_api=server_api
             )
-        else:  # windows
+        else:
             script_content = self.config_generator.generate_windows_install_script(
                 node_name=node_name,
                 server_api=server_api
             )
             
-        # 更新服务端 WireGuard 配置
-        try:
-            self._update_server_config()
-        except Exception as e:
-            # 回滚：删除已添加的节点
-            self.db.delete_node(node_id)
-            raise RuntimeError(f"更新服务端配置失败: {str(e)}")
-            
         return {
-            'node_id': node_id,
-            'node_name': node_name,
-            'virtual_ip': virtual_ip,
-            'public_key': public_key,
-            'platform': platform,
-            'description': description,
+            'node_id': node.id,
+            'node_name': node.node_name,
+            'virtual_ip': node.virtual_ip,
+            'public_key': node.public_key,
+            'platform': node.platform,
+            'description': node.description,
             'config_content': config_content,
             'script_content': script_content,
-            'created_at': node_info['created_at']
+            'created_at': node.created_at
         }
-        
+    
     def get_node(self, node_id: Optional[int] = None, 
-                 node_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
+                 node_name: Optional[str] = None) -> Optional[Node]:
         """获取节点信息
         
         Args:
@@ -140,23 +150,23 @@ class NodeManager:
             node_name: 节点名称
             
         Returns:
-            节点信息字典，如果不存在返回 None
+            节点实体，如果不存在返回 None
         """
         if node_id:
-            return self.db.get_node_by_id(node_id)
+            return self.node_repo.get_by_id(node_id)
         elif node_name:
-            return self.db.get_node_by_name(node_name)
+            return self.node_repo.get_by_name(node_name)
         else:
             raise ValueError("必须提供 node_id 或 node_name")
-            
-    def list_nodes(self) -> List[Dict[str, Any]]:
+    
+    def list_nodes(self) -> List[Node]:
         """获取所有节点列表
         
         Returns:
-            节点信息列表
+            节点列表
         """
-        return self.db.get_all_nodes()
-        
+        return self.node_repo.list_all()
+    
     def delete_node(self, node_id: int) -> bool:
         """删除节点
         
@@ -170,12 +180,12 @@ class NodeManager:
             ValueError: 节点不存在
         """
         # 检查节点是否存在
-        node = self.db.get_node_by_id(node_id)
+        node = self.node_repo.get_by_id(node_id)
         if not node:
             raise ValueError(f"节点 ID {node_id} 不存在")
             
-        # 从数据库删除
-        success = self.db.delete_node(node_id)
+        # 删除节点
+        success = self.node_repo.delete(node_id)
         
         if success:
             # 更新服务端配置
@@ -185,13 +195,13 @@ class NodeManager:
                 print(f"警告: 更新服务端配置失败: {str(e)}")
                 
         return success
-        
-    def export_node_config(self, node_id: int, output_dir: Optional[str] = None) -> str:
+    
+    def export_config(self, node_id: int, output_dir: Optional[str] = None) -> str:
         """导出节点配置到文件
         
         Args:
             node_id: 节点 ID
-            output_dir: 输出目录（默认使用配置中的导出目录）
+            output_dir: 输出目录
             
         Returns:
             导出目录路径
@@ -200,27 +210,27 @@ class NodeManager:
             ValueError: 节点不存在
         """
         # 获取节点信息
-        node = self.db.get_node_by_id(node_id)
+        node = self.node_repo.get_by_id(node_id)
         if not node:
             raise ValueError(f"节点 ID {node_id} 不存在")
             
         # 获取服务端信息
-        server_info = self.db.get_server_info()
-        if not server_info:
+        server = self.server_repo.get()
+        if not server:
             raise RuntimeError("服务端未初始化")
             
         # 确定输出目录
         if not output_dir:
             output_dir = config.EXPORT_DIR
             
-        node_dir = os.path.join(output_dir, node['node_name'])
+        node_dir = os.path.join(output_dir, node.node_name)
         os.makedirs(node_dir, exist_ok=True)
         
         # 生成配置内容
         dns_server = self.db.get_config_param('dns_server') or config.DEFAULT_DNS_SERVER
         config_content = self.config_generator.generate_client_config(
-            node_info=node,
-            server_info=server_info,
+            node_info=node.to_dict(include_private_key=True),
+            server_info=server.to_dict(include_private_key=True),
             dns_server=dns_server
         )
         
@@ -230,17 +240,17 @@ class NodeManager:
             f.write(config_content)
             
         # 生成并写入接入脚本
-        server_api = f"http://SERVER_IP:{config.API_PORT}"
+        server_api = f"http://SERVER_IP:8080"
         
-        if node['platform'] == 'linux':
+        if node.platform == 'linux':
             script_content = self.config_generator.generate_linux_install_script(
-                node_name=node['node_name'],
+                node_name=node.node_name,
                 server_api=server_api
             )
             script_path = os.path.join(node_dir, 'install.sh')
-        else:  # windows
+        else:
             script_content = self.config_generator.generate_windows_install_script(
-                node_name=node['node_name'],
+                node_name=node.node_name,
                 server_api=server_api
             )
             script_path = os.path.join(node_dir, 'install.ps1')
@@ -249,24 +259,27 @@ class NodeManager:
             f.write(script_content)
             
         # Linux 脚本需要执行权限
-        if node['platform'] == 'linux':
+        if node.platform == 'linux':
             os.chmod(script_path, 0o755)
             
         return node_dir
-        
+    
     def _update_server_config(self):
         """更新服务端 WireGuard 配置文件"""
         # 获取服务端信息和所有节点
-        server_info = self.db.get_server_info()
-        if not server_info:
+        server = self.server_repo.get()
+        if not server:
             raise RuntimeError("服务端未初始化")
             
-        all_nodes = self.db.get_all_nodes()
+        all_nodes = self.node_repo.list_all()
+        
+        # 转换为字典列表
+        nodes_dict = [node.to_dict(include_private_key=True) for node in all_nodes]
         
         # 生成配置文件内容
         config_content = self.config_generator.generate_server_config(
-            server_info=server_info,
-            nodes=all_nodes
+            server_info=server.to_dict(include_private_key=True),
+            nodes=nodes_dict
         )
         
         # 备份现有配置（如果存在）
@@ -292,9 +305,11 @@ class NodeManager:
             self._reload_wireguard()
         except Exception as e:
             print(f"警告: 重载 WireGuard 配置失败: {str(e)}")
-            
+    
     def _reload_wireguard(self):
         """重载 WireGuard 配置"""
+        import subprocess
+        
         interface_name = config.WG_INTERFACE_NAME
         
         # 检查接口是否存在

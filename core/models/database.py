@@ -5,13 +5,13 @@
 import sqlite3
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-import config
+from config import base as config
 
 
 class Database:
     """数据库操作类"""
     
-    def __init__(self, db_path: str = None):
+    def __init__(self, db_path: Optional[str] = None):
         """初始化数据库连接
         
         Args:
@@ -91,7 +91,6 @@ class Database:
         
         # 插入默认配置参数
         default_params = [
-            ('api_port', str(config.API_PORT), 'HTTP API 服务端口'),
             ('persistent_keepalive', str(config.PERSISTENT_KEEPALIVE), '持久连接保活间隔（秒）'),
             ('dns_server', config.DEFAULT_DNS_SERVER, '默认 DNS 服务器'),
             ('export_dir', config.EXPORT_DIR, '配置文件导出目录'),
@@ -106,7 +105,7 @@ class Database:
         
     def save_server_info(self, public_key: str, private_key: str, 
                         virtual_ip: str, listen_port: int, 
-                        network_cidr: str, public_endpoint: str = None) -> bool:
+                        network_cidr: str, public_endpoint: Optional[str] = None) -> bool:
         """保存服务端信息
         
         Args:
@@ -164,7 +163,7 @@ class Database:
         return None
         
     def add_node(self, node_name: str, virtual_ip: str, public_key: str,
-                 private_key: str, platform: str, description: str = None) -> int:
+                 private_key: str, platform: str, description: Optional[str] = None) -> int:
         """添加节点
         
         Args:
